@@ -19,8 +19,5 @@ vector<double> Utils::map2car(loc_t map, loc_t ego, double yaw) {
  * @return
  */
 vector<double> Utils::car2map(loc_t ego, loc_t local) {
-  double x_diff = ego.x - local.x;
-  double y_diff = ego.y - local.y;
-
-  return { local.x + x_diff, local.y + y_diff };
+  return { local.x + ego.x, local.y + ego.y };
 }

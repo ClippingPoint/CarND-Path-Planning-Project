@@ -35,10 +35,37 @@ string hasData(string s) {
   return "";
 }
 
-double distance(double x1, double y1, double x2, double y2)
+double Distance(const double x1, const double y1,
+								const double x2, const double y2)
 {
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
+
+/**
+ *
+ * @param map_x
+ * @param map_y
+ * @param car_x
+ * @param car_y
+ * @param yaw
+ * @return
+ */
+vector<double> MapXY2localXY(const double map_x, const double map_y,
+								 const double car_x, const double car_y, const double yaw)
+{
+	double x = map_x - car_x;
+	double y = map_y - car_y;
+
+	return {x * cos(-yaw) - y * sin(-yaw),
+					x * sin(-yaw) + y * cos(-yaw)};
+}
+
+vector<double> localXY2mapXY(const double car_x, const double car_y,
+														 const double l_x, const double l_y, const double yaw){
+  return {l_x * cos(yaw) - l_y * sin(yaw) + car_x,
+					l_y * sin(yaw) + l_y * cos(yaw) + car_y};
+}
+
 int ClosestWaypoint(double x, double y, vector<double> maps_x, vector<double> maps_y)
 {
 
@@ -248,28 +275,45 @@ int main() {
           int next_wp = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
           vector<double> map_in_local;
 
-          // Hyper parameter
-          int POINT_SIZE = 5;
-          vector<double> local_maps_x;
-          vector<double> local_maps_y;
-          for (auto i = 0; i < POINT_SIZE; i += 1) {
-            // POD initialization
-            loc_t map = {map_waypoints_x[next_wp + i], map_waypoints_y[next_wp + i]};
-            loc_t ego = {car_x, car_y};
-
-            map_in_local = utils.map2car(map, ego, car_yaw);
-            local_maps_x.push_back(map_in_local[0]);
-            local_maps_y.push_back(map_in_local[1]);
-          }
-          // Let's try tk spline first
-
-          // Padding previous values
           int path_size = previous_path_x.size();
+          double pos_x, pos_y, angle;
+          // No previous points
+					double num_steps = 50;
+					// max speed ~ 49.75MPH
+					const double max_diff = 0.445;
+					vector<double> t;
+          vector<double> dist_inc;
+					tk::spline speed_curve;
 
-          for (auto i = 0; i < path_size; i+=1) {
-            next_x_vals.push_back(previous_path_x[i]);
-            next_y_vals.push_back(previous_path_y[i]);
+          if(path_size == 0)
+          {
+            pos_x = car_x;
+            pos_y = car_y;
+            angle = deg2rad(car_yaw);
+//						TODO: fix time point and distance increase
+
+						// Manually featured velocity profile
+						t.push_back(-1);
+						t.push_back(6);
+						t.push_back(12);
+						t.push_back(25);
+						t.push_back(num_steps);
+						t.push_back(num_steps * 2);
+
+						dist_inc.push_back(max_diff * 0.01);
+						dist_inc.push_back(max_diff * 0.05);
+						dist_inc.push_back(max_diff * 0.1);
+						dist_inc.push_back(max_diff * 0.2);
+						dist_inc.push_back(max_diff * 0.4);
+						dist_inc.push_back(max_diff);
+
+            speed_curve.set_points(t, dist_inc);
+						double x_diff, y_diff;
+						for (size_t i = 0; i < num_steps; i+=1) {
+              x_diff = speed_curve(i);
+						}
           }
+
 
           // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           msgJson["next_x"] = next_x_vals;

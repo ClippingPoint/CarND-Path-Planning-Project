@@ -8,6 +8,7 @@
 #include <vector>
 #include <math.h>
 #include "Constants.h"
+#include "spline.h"
 
 using namespace std;
 

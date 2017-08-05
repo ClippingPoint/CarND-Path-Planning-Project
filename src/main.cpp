@@ -35,7 +35,7 @@ string hasData(string s) {
   return "";
 }
 
-double Distance(const double x1, const double y1,
+double distance(const double x1, const double y1,
 								const double x2, const double y2)
 {
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
@@ -50,7 +50,7 @@ double Distance(const double x1, const double y1,
  * @param yaw
  * @return
  */
-vector<double> MapXY2localXY(const double map_x, const double map_y,
+vector<double> mapXY2localXY(const double map_x, const double map_y,
 								 const double car_x, const double car_y, const double yaw)
 {
 	double x = map_x - car_x;
@@ -65,6 +65,11 @@ vector<double> localXY2mapXY(const double car_x, const double car_y,
   return {l_x * cos(yaw) - l_y * sin(yaw) + car_x,
 					l_y * sin(yaw) + l_y * cos(yaw) + car_y};
 }
+
+struct Path {
+	vector<double> x;
+	vector<double> y;
+};
 
 int ClosestWaypoint(double x, double y, vector<double> maps_x, vector<double> maps_y)
 {
@@ -187,6 +192,34 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+/**
+ *
+ * @param x
+ * @param y
+ * @param theta car_yaw
+ * @param maps_x
+ * @param maps_y
+ * @return
+ */
+Path getAdjacentLocalWaypoints(const double x, const double y, const double theta,
+																 Path path) {
+  // ClosestWaypoints can also be used
+	int next_wp = NextWaypoint(x, y, theta, path.x, path.y);
+	int map_size = path.x.size();
+
+	Path global_wps;
+
+  // Fitting using both past waypoints and future waypoints
+	for (int i = -5, wp_id; i < 20; i+=1) {
+    wp_id = (next_wp + i)%path.x.size();
+		if (wp_id < 0) { wp_id += map_size; }
+    global_wps.x.push_back(path.x[wp_id]);
+		global_wps.y.push_back(path.y[wp_id]);
+
+	}
+  return global_wps;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -284,13 +317,13 @@ int main() {
 					vector<double> t;
           vector<double> dist_inc;
 					tk::spline speed_curve;
+					tk::spline local_curve;
 
           if(path_size == 0)
           {
             pos_x = car_x;
             pos_y = car_y;
             angle = deg2rad(car_yaw);
-//						TODO: fix time point and distance increase
 
 						// Manually featured velocity profile
 						t.push_back(-1);
@@ -312,6 +345,8 @@ int main() {
 						for (size_t i = 0; i < num_steps; i+=1) {
               x_diff = speed_curve(i);
 						}
+
+						// Getting nearest waypoints
           }
 
 

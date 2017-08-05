@@ -207,17 +207,23 @@ Path getAdjacentLocalWaypoints(const double x, const double y, const double thet
 	int next_wp = NextWaypoint(x, y, theta, path.x, path.y);
 	int map_size = path.x.size();
 
-	Path global_wps;
+	Path global_wps_in_local;
 
   // Fitting using both past waypoints and future waypoints
 	for (int i = -5, wp_id; i < 20; i+=1) {
     wp_id = (next_wp + i)%path.x.size();
 		if (wp_id < 0) { wp_id += map_size; }
-    global_wps.x.push_back(path.x[wp_id]);
-		global_wps.y.push_back(path.y[wp_id]);
+    global_wps_in_local.x.push_back(path.x[wp_id]);
+		global_wps_in_local.y.push_back(path.y[wp_id]);
 
 	}
-  return global_wps;
+  return global_wps_in_local;
+}
+
+tk::spline fitLocalWaypoints(const Path waypoints_segment) {
+	tk::spline local_curve;
+  local_curve.set_points(waypoints_segment.x, waypoints_segment.y);
+	return local_curve;
 }
 
 int main() {
@@ -305,7 +311,6 @@ int main() {
           /***********************************************
 					 * User code
 					 ***********************************************/
-          int next_wp = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
           vector<double> map_in_local;
 
           int path_size = previous_path_x.size();
@@ -346,7 +351,9 @@ int main() {
               x_diff = speed_curve(i);
 						}
 
-						// Getting nearest waypoints
+						Path WayPoints = {map_waypoints_x, map_waypoints_y};
+						Path global_wps_local =
+										getAdjacentLocalWaypoints(pos_x, pos_y, angle, WayPoints);
           }
 
 

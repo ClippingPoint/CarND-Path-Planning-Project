@@ -41,6 +41,18 @@ double distance(const double x1, const double y1,
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
 
+struct Path {
+	vector<double> x;
+	vector<double> y;
+};
+
+struct MapPath {
+	vector<double> x;
+	vector<double> y;
+	vector<double> dx;
+	vector<double> dy;
+};
+
 /**
  *
  * @param map_x
@@ -56,8 +68,8 @@ vector<double> mapXY2localXY(const double map_x, const double map_y,
 	double x = map_x - car_x;
 	double y = map_y - car_y;
 
-	return {x * cos(-yaw) - y * sin(-yaw),
-					x * sin(-yaw) + y * cos(-yaw)};
+	return {x * cos(yaw) + y * sin(yaw),
+					-x * sin(yaw) + y * cos(yaw)};
 }
 
 vector<double> localXY2mapXY(const double car_x, const double car_y,
@@ -66,10 +78,18 @@ vector<double> localXY2mapXY(const double car_x, const double car_y,
 					l_y * sin(yaw) + l_y * cos(yaw) + car_y};
 }
 
-struct Path {
-	vector<double> x;
-	vector<double> y;
-};
+Path mapXYs2localXYs(Path global, const double car_x, const double car_y, const double car_yaw) {
+	Path local_XYs;
+  vector<double> local_xy;
+	int size = global.x.size();
+	for (auto i = 0; i < size; i+=1) {
+		local_xy = mapXY2localXY(global.x[(int)i], global.y[(int)i], car_x, car_y, car_yaw);
+    local_XYs.x.push_back(local_xy[0]);
+		local_XYs.y.push_back(local_xy[1]);
+	}
+	return local_XYs;
+}
+
 
 int ClosestWaypoint(double x, double y, vector<double> maps_x, vector<double> maps_y)
 {
@@ -201,26 +221,26 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
  * @param maps_y
  * @return
  */
-Path getAdjacentLocalWaypoints(const double x, const double y, const double theta,
-																 Path path) {
+Path getAdjacentLocalWaypoints(const double x, const double y, const double theta, const double d,
+																 MapPath path) {
   // ClosestWaypoints can also be used
 	int next_wp = NextWaypoint(x, y, theta, path.x, path.y);
 	int map_size = path.x.size();
 
-	Path global_wps_in_local;
+	Path global_wps_segment;
 
   // Fitting using both past waypoints and future waypoints
 	for (int i = -5, wp_id; i < 20; i+=1) {
     wp_id = (next_wp + i)%path.x.size();
 		if (wp_id < 0) { wp_id += map_size; }
-    global_wps_in_local.x.push_back(path.x[wp_id]);
-		global_wps_in_local.y.push_back(path.y[wp_id]);
+    global_wps_segment.x.push_back(path.x[wp_id] + d*path.dx[wp_id]);
+		global_wps_segment.y.push_back(path.y[wp_id] + d*path.dy[wp_id]);
 
 	}
-  return global_wps_in_local;
+  return global_wps_segment;
 }
 
-tk::spline fitLocalWaypoints(const Path waypoints_segment) {
+tk::spline fitLocalWaypoints(Path waypoints_segment) {
 	tk::spline local_curve;
   local_curve.set_points(waypoints_segment.x, waypoints_segment.y);
 	return local_curve;
@@ -263,6 +283,9 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
+	// Logging
+	string log_file = "../data/logger.csv";
+	ofstream out_log(log_file.c_str(), ofstream::out);
 	Utils utils;
 
   h.onMessage([&utils, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -324,6 +347,26 @@ int main() {
 					tk::spline speed_curve;
 					tk::spline local_curve;
 
+					MapPath WayPoints = {map_waypoints_x, map_waypoints_y,
+																 map_waypoints_dx, map_waypoints_dy};
+
+					t.push_back(-1);
+					t.push_back(6);
+					t.push_back(12);
+					t.push_back(25);
+					t.push_back(num_steps);
+					t.push_back(num_steps * 2);
+
+					// TODO: fit another speed profile
+					dist_inc.push_back(max_diff * 0.01);
+					dist_inc.push_back(max_diff * 0.1);
+					dist_inc.push_back(max_diff * 0.3);
+					dist_inc.push_back(max_diff * 0.6);
+					dist_inc.push_back(max_diff * 0.9);
+					dist_inc.push_back(max_diff);
+
+					speed_curve.set_points(t, dist_inc);
+
           if(path_size == 0)
           {
             pos_x = car_x;
@@ -331,32 +374,102 @@ int main() {
             angle = deg2rad(car_yaw);
 
 						// Manually featured velocity profile
-						t.push_back(-1);
-						t.push_back(6);
-						t.push_back(12);
-						t.push_back(25);
-						t.push_back(num_steps);
-						t.push_back(num_steps * 2);
+            // What if we use fitted s, x and s, y curve?
+//						t.push_back(-1);
+//						t.push_back(6);
+//						t.push_back(12);
+//						t.push_back(25);
+//						t.push_back(num_steps);
+//						t.push_back(num_steps * 2);
+//
+//						// TODO: fit another speed profile
+//						dist_inc.push_back(max_diff * 0.01);
+//						dist_inc.push_back(max_diff * 0.1);
+//						dist_inc.push_back(max_diff * 0.3);
+//						dist_inc.push_back(max_diff * 0.6);
+//						dist_inc.push_back(max_diff * 0.8);
+//						dist_inc.push_back(max_diff);
+//
+//            speed_curve.set_points(t, dist_inc);
 
-						dist_inc.push_back(max_diff * 0.01);
-						dist_inc.push_back(max_diff * 0.05);
-						dist_inc.push_back(max_diff * 0.1);
-						dist_inc.push_back(max_diff * 0.2);
-						dist_inc.push_back(max_diff * 0.4);
-						dist_inc.push_back(max_diff);
+						int lane = 1;
+						double d = 2 + lane * 4;
+						Path global_wps_segment =
+										getAdjacentLocalWaypoints(pos_x, pos_y, angle, d, WayPoints);
+						Path local_wps_segment = mapXYs2localXYs(global_wps_segment, pos_x, pos_y, angle);
+						tk::spline local_curve = fitLocalWaypoints(local_wps_segment);
 
-            speed_curve.set_points(t, dist_inc);
-						double x_diff, y_diff;
-						for (size_t i = 0; i < num_steps; i+=1) {
-              x_diff = speed_curve(i);
+						double speed_inc;
+						double next_x = 0, next_y;
+						vector<double>globalXY;
+						vector<double>prev_vd;
+						for (auto i = 0; i < num_steps; i+=1) {
+							speed_inc = speed_curve(0.0 + i);
+							prev_vd.push_back(speed_inc);
+
+							next_x += speed_inc * cos(angle);
+              next_y = local_curve(next_x);
+							cout << "Speed inc: " << speed_inc << endl;
+//							out_log << "Speed inc" << speed_inc << endl;
+							// TODO transfer back to global coordinates
+							globalXY = localXY2mapXY(pos_x, pos_y, next_x, next_y, angle);
+							next_x_vals.push_back(globalXY[0]);
+							next_y_vals.push_back(globalXY[1]);
+              cout << "next_x: " << globalXY[0] << endl;
+							cout << "next_y: " << globalXY[1] << endl;
+              // Do another filtering based on distance
 						}
+						cout << "<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+					} else {
+						// After moving
 
-						Path WayPoints = {map_waypoints_x, map_waypoints_y};
-						Path global_wps_local =
-										getAdjacentLocalWaypoints(pos_x, pos_y, angle, WayPoints);
-          }
+						int path_size = previous_path_x.size();
+						pos_x = previous_path_x[path_size-1];
+						pos_y = previous_path_y[path_size-1];
 
+						double pos_x2 = previous_path_x[path_size-2];
+						double pos_y2 = previous_path_y[path_size-2];
+						angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
 
+					/*	double pos_x = previous_path_x[0];
+						double pos_y = previous_path_y[0];
+						double pos_x2 = previous_path_x[1];
+						double pos_y2 = previous_path_y[1];
+						double angle = atan2(pos_y2 - pos_y, pos_x2 - pos_x);*/
+            // Do another planning
+
+						int lane = 1;
+						double d = 2 + lane * 4;
+						Path global_wps_segment =
+										getAdjacentLocalWaypoints(pos_x, pos_y, angle, d, WayPoints);
+						Path local_wps_segment = mapXYs2localXYs(global_wps_segment, car_x, car_y, car_yaw);
+						/*for (auto i = 0; i < local_wps_segment.x.size(); i+=1) {
+							cout << "local wps segment x: " << local_wps_segment.x[i] << endl;
+							cout << "local wps segment y: " << local_wps_segment.y[i] << endl;
+						}*/
+						tk::spline local_curve = fitLocalWaypoints(local_wps_segment);
+
+						double speed_inc;
+						double next_x = 0, next_y;
+						vector<double>globalXY;
+						vector<double>prev_vd;
+						for (auto i = 0; i < num_steps; i+=1) {
+							speed_inc = speed_curve(0.0 + i);
+							prev_vd.push_back(speed_inc);
+
+							next_x += speed_inc * cos(angle);
+              next_y = local_curve(next_x);
+							cout << "Speed inc: " << speed_inc << endl;
+							// TODO transfer back to global coordinates
+							globalXY = localXY2mapXY(pos_x, pos_y, next_x, next_y, angle);
+							next_x_vals.push_back(globalXY[0]);
+							next_y_vals.push_back(globalXY[1]);
+              cout << "next_x: " << globalXY[0] << endl;
+							cout << "next_y: " << globalXY[1] << endl;
+              // Do another filtering based on distance
+						}
+						cout << "<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+					}
           // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
